@@ -1,0 +1,369 @@
+server:
+
+#include <iostream>
+#include <string>
+#define _WINSOCK_DEPRECATED_NO_WARNINGS 
+#include <WinSock2.h>
+#include <Windows.h>
+#include <map>
+#include <vector>
+#pragma comment (lib, "Ws2_32.lib")
+#pragma warning(disable: 4996)
+
+#define LISTENPORT 666
+#define BUF_SIZE 2048
+
+using namespace std;
+
+struct Student {//структура данных для передачи
+    char fam[20];
+    int vals[4];
+};
+
+struct Message {//структура данных для сообщения
+    int type;
+    char message[256];
+    Student st;
+};
+
+int nClients = 0;//начальное число клиентов
+
+void printUsers() {
+    if (nClients > 0)
+        cout << nClients << " users online" << endl;
+    else
+        cout << "No users online" << endl;
+    cout << endl;
+}
+
+// Прототип функции потока, обслуживающей подключившихся пользователей
+DWORD WINAPI connectToClient(LPVOID clientSocket) {
+
+    SOCKET cSocket = ((SOCKET*)clientSocket)[0];
+    Message msg;
+    char greeting[] = "Добрый день! Сервер готов к работе \r\n";
+    int len = 0;
+
+    // Отправляем сообщение клиенту
+    send(cSocket, greeting, sizeof(greeting), 0);
+
+    while ((len = recv(cSocket, (char*)&msg, sizeof(msg), 0)) != SOCKET_ERROR) {
+        if (msg.type == 1) {
+            map <string, vector <int> > Data = {
+                {"Rodri", {8,7,190}},
+                {"Ronaldo", {9,10,187}},
+                {"Messi", {8,10,170}},
+                {"Lewandowski", {7,9,185}},
+                {"Vinicius", {10,8,176}},
+                {"De Bruyne", {7,7,181}},
+                {"Kane", {8,8,188}},
+                {"Mbappe", {10,7,178}},
+                {"VanDijk", {7,8,195}},
+                {"Bellingham", {7,9,186}},
+            };
+            cout << "(Пользователь): " << msg.message << endl << endl;
+            string ans; string d(msg.message);
+            if (Data.count(d) > 0) {
+                ans = "Футболист " + d + " найден\nСкорость: " + to_string(Data.at(d)[0]) + "\nСила: " + to_string(Data.at(d)[1]) + "\nРост: " + to_string(Data.at(d)[2]);
+            }
+            else {
+                ans = "Такой футболист не найден";
+            }
+            send(cSocket, ans.c_str(), ans.length(), 0);
+        }
+        if (msg.type == 2) {
+            Student y = msg.st;
+
+            if (string(y.fam) == "exit")
+                break;
+
+            cout << "Получены данные об Игроке " << y.fam << endl;
+            int height = msg.st.vals[0];
+            int power = msg.st.vals[1];
+            int speed = msg.st.vals[2];
+            int Intel = msg.st.vals[3];
+            string ans;
+            if (height > 180 && power > 7 && Intel > 7) {
+                ans = "Опорный полузащитник";
+            }
+            else {
+                if (speed > 7 && power > 7) {
+                    ans = "Вингер (Правый или Левый Нападающий)";
+                }
+                else {
+                    if (power > 7 && Intel > 7) {
+                        ans = "Атакующий полузащитник";
+                    }
+                    else {
+                        if (height > 180 && speed > 8) {
+                            ans = "Центральный нападающий";
+                        }
+                        else {
+                            if (height > 180 && power > 7) {
+                                ans = "Защитник";
+                            }
+                            else {
+                                ans = "Вратарь";
+                            }
+                        }
+                    }
+                }
+            }
+            send(cSocket, ans.c_str(), ans.length(), 0);
+        }
+    }
+
+    // Клиент вышел
+    nClients--;
+    cout << "Пользователь вышел" << endl;
+    printUsers();
+    closesocket(cSocket);
+    return 0;
+}
+
+int main() {
+    setlocale(LC_ALL, "rus");
+    Sleep(1000);
+    // Оформление окна
+    cout << "\t Сервер\n";
+    for (int i = 0; i < 30; i++)
+        cout << "-";
+    cout << endl;
+    Sleep(1000);
+    // Инициализируем библиотеку сокетов
+    WSADATA ws;
+    if (WSAStartup(MAKEWORD(2, 2), &ws)) {
+        cout << "Ошибка WSAStartup! \n" << WSAGetLastError();
+        return -1;
+    }
+
+    // Создание сокета
+    SOCKET sListener;
+    if ((sListener = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+        cout << "Ошибка socket! \n" << WSAGetLastError();
+        WSACleanup();
+        return -1;
+    }
+
+    // Создаем локальный адрес сервера
+    sockaddr_in sLocal;
+    sLocal.sin_family = AF_INET;
+    sLocal.sin_port = htons(LISTENPORT);
+    sLocal.sin_addr.s_addr = 0;
+
+    // Связываем сокет с адресом сервера
+
+    if (bind(sListener, (sockaddr*)&sLocal, sizeof(sLocal))) {
+        cout << "Ошибка bind! \n" << WSAGetLastError();
+        Sleep(10000);
+        closesocket(sListener);
+        WSACleanup();
+        /*return -1;*/
+    }
+
+
+
+    // Инициализируем слушающий сокет
+    if (listen(sListener, 0x100)) {
+        cout << "Ошибка listen! \n" << WSAGetLastError();
+        closesocket(sListener);
+        Sleep(10000);
+        WSACleanup();
+        return -1;
+    }
+
+    cout << "Waiting for connection..." << endl;
+
+    // Создаем сокет и адрес клиента
+    SOCKET sClient;  // Сокет клиента
+    sockaddr_in adrClient; // Адрес клиента (заполнится автоматически при вызове)
+    char buf[BUF_SIZE + 1] = { 0 };
+    int len = sizeof(adrClient);
+
+    // Цикл приема клиентов
+    while (true) {
+        // Принимаем входящее соединение
+        if ((sClient = accept(sListener, (sockaddr*)&adrClient, &len)) == INVALID_SOCKET) {
+            cout << "Ошибка accept! \n" << WSAGetLastError();
+            closesocket(sListener);
+            WSACleanup();
+            return -1;
+        }
+
+        // Увеличиваем число клиентов онлайн
+        nClients++;
+        cout << "Новое подключение! \n";
+
+        // Получаем сведения о подключившемся клиенте
+        HOSTENT* hst = gethostbyaddr((char*)&adrClient.sin_addr.s_addr, 4, AF_INET);
+
+        // Выводим сведения о подключившемся клиенте и общее число клиентов
+        if (hst)
+            cout << hst->h_name << ' ';
+        cout << inet_ntoa(adrClient.sin_addr) << endl;
+        printUsers();
+
+        //Создаем новый поток для обслуживания клиента
+        DWORD threadId;
+        CreateThread(NULL, NULL, connectToClient, &sClient, NULL, &threadId);
+    }
+
+    closesocket(sListener);
+    WSACleanup();
+    return 0;
+}
+
+
+
+client:
+
+#include <iostream>
+#include <string>
+
+#define _WINSOCK_DEPRECATED_NO_WARNINGS 
+#include <WinSock2.h>
+#include <Windows.h>
+#pragma comment (lib, "Ws2_32.lib")
+#pragma warning(disable: 4996)
+
+
+#define BUF_SIZE 2048
+#define SRV_PORT 666
+#define SRV_ADDR "127.0.0.1"
+
+using namespace std;
+
+struct Student {//структура данных для передачи
+    char fam[20];
+    int vals[4];
+};
+
+struct Message {//структура данных для сообщения
+    int type;
+    char message[256];
+    Student st;
+};
+
+
+int main() {
+    setlocale(LC_ALL, "rus");
+    // Оформление окна
+    cout << "\t Клиент\n";
+    cout << "Типы взаимодействий с сервером: " << endl;
+    cout << "1: ФУТБОЛЬНИК" << endl;
+    cout << "2: Какой ты футболист?" << endl;
+    cout << "Команда выхода: exit \n";
+    for (int i = 0; i < 30; i++)
+        cout << "-";
+    cout << endl;
+
+    int type;
+    cout << "Выберите тип взаимодействия с сервером: ";
+    cin >> type;
+    string str;
+    getline(cin, str); // Считываем перевод строки
+
+    // Инициализируем библиотеку сокетов
+    WSADATA ws;
+    if (WSAStartup(MAKEWORD(2, 2), &ws)) {
+        cout << "Ошибка WSAStartup! \n" << WSAGetLastError();
+        return -1;
+    }
+
+    // Создание сокета
+    SOCKET s;
+    if ((s = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+        cout << "Ошибка socket! \n" << WSAGetLastError();
+        WSACleanup();
+        return -1;
+    }
+
+    // Указание адреса и порта сервера
+    sockaddr_in srvAddr;
+    srvAddr.sin_family = AF_INET;
+    srvAddr.sin_port = htons(SRV_PORT);
+
+    HOSTENT* hst;
+
+    // Преобразование IP-адреса из символьного в сетевой формат
+    if (inet_addr(SRV_ADDR) != INADDR_NONE)
+        srvAddr.sin_addr.s_addr = inet_addr(SRV_ADDR);
+    else {
+        // Попытка получить IP-адрес по доменному имени
+        if (hst = gethostbyname(SRV_ADDR))
+            ((unsigned long*)&srvAddr.sin_addr)[0] =
+            ((unsigned long**)hst->h_addr_list)[0][0];
+        else {
+            cout << "Неверный сетевой адрес! \n" << WSAGetLastError();
+            closesocket(s);
+            WSACleanup();
+            return -1;
+        }
+    }
+
+    // Установление соединения
+    if (connect(s, (sockaddr*)&srvAddr, sizeof(srvAddr))) {
+        cout << "Ошибка connect! \n" << WSAGetLastError();
+        closesocket(s);
+        WSACleanup();
+        return -1;
+    }
+
+    int len = 0;
+    char buf[BUF_SIZE + 1] = { 0 };
+
+    // Цикл получения сообщений
+    while (true) {
+        len = recv(s, &buf[0], BUF_SIZE, 0);
+        if (len == SOCKET_ERROR) {
+            cout << "Ошибка recv! \n" << WSAGetLastError();
+            closesocket(s);
+            WSACleanup();
+            return -1;
+        }
+
+        // Вывод сообщения от сервера
+        buf[len] = '\0';
+        cout << "(Сервер): " << buf << endl;
+
+
+        Message msg;
+        msg.type = type;
+
+        if (type == 1) {
+            cout << "Введите сообщение: " << endl;
+            // Ввод сообщения пользователя
+            cin.getline(msg.message, 255);
+            if (string(msg.message) == "exit") {
+                // Отправка сообщения
+                send(s, (char*)&msg, sizeof(msg), 0);
+                cout << "Exit... \n";
+                break;
+            }
+        }
+        if (type == 2) {
+            cout << "Введите фамилию: ";
+            cin.getline(msg.st.fam, 20);
+            if (string(msg.st.fam) == "exit") {
+                // Отправка сообщения
+                send(s, (char*)&msg, sizeof(msg), 0);
+                cout << "Exit... \n";
+                break;
+            }
+            cout << "Введите Рост, Силу, Скорость, Интеллект:";
+            for (int i = 0; i < 4; i++)
+                cin >> msg.st.vals[i];
+            getline(cin, str); // Перевод строки
+        }
+
+        // Отправка сообщения
+        send(s, (char*)&msg, sizeof(msg), 0);
+
+    }
+
+    closesocket(s);
+    WSACleanup();
+    return 0;
+}
+
+
