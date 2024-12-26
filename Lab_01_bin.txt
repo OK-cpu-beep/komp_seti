@@ -1,0 +1,129 @@
+client:
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <windows.h>
+
+using namespace std;
+
+struct Req {
+    string user_name;
+    int trophies;
+    int rank35;
+    int elo_in_ranked;
+    int id;
+};
+
+int main() {
+    setlocale(LC_ALL, "");
+
+    ifstream f_ANS;
+    ofstream f_REQ;
+    long size_pred;
+    int answer;
+    Req R;
+    const string nameR = "E:\\REQUEST.bin";
+    const string nameA = "E:\\ANSWER.bin";
+
+    while (true) {
+        cout << "Введите запрос: Ваш id, Ник, кол-во кубков, кол-во 35 рангов, рейтинг в ранкед" << endl;
+        cin >> R.id >> R.user_name >> R.trophies >> R.rank35 >> R.elo_in_ranked;
+        f_REQ.open(nameR, ios::app);
+        f_REQ.write((char*)&R, sizeof(R));
+        f_REQ.close();
+
+        f_ANS.open(nameA, ios::binary);
+        f_ANS.seekg(0, ios::end);
+        size_pred = f_ANS.tellg();
+        while (size_pred >= f_ANS.tellg()) {
+            f_ANS.seekg(0, ios::end);
+            Sleep(1000);
+        }
+        f_ANS.seekg(size_pred, ios::beg);
+        f_ANS.read((char*)&answer, sizeof(answer));
+        f_ANS.close();
+        switch (answer) {
+        case 0: { cout << "НАЧИНАЮЩИЙ"; break; }
+        case 1: { cout << "СРЕДНИЙ";  break; }
+        case 2: { cout << "ПРОДВИНУТЫЙ";  break; }
+        case 3: { cout << "МАСТЕР";  break; }
+        }
+        cout << endl;
+    }
+    return 0;
+}
+
+server:
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <windows.h>
+#include <vector>
+
+using namespace std;
+
+struct Req {
+    string user_name;
+    int id;
+    int trophies;
+    int rank35;
+    int elo_in_ranked;
+};
+int answer;
+long size_pred;
+
+int main() {
+    setlocale(LC_ALL, "russian");
+    ifstream fR;
+    ofstream fA;
+    Req request;
+    const string nameR = "E:\\REQUEST.bin";
+    const string nameA = "E:\\ANSWER.bin";
+    cout << "Сервер запущен" << endl;
+
+    fR.open(nameR);
+    fR.seekg(0, ios::end);
+    size_pred = fR.tellg();
+    fR.close();
+
+    while (true) {
+        fR.open(nameR);
+        fR.seekg(0, ios::end);
+
+        while (size_pred >= fR.tellg()) {
+            fR.seekg(0, ios::end);
+            Sleep(1000);
+        }
+
+        fR.seekg(size_pred, ios::beg);
+        fR.read((char*)&request, sizeof(request));
+        size_pred = fR.tellg();
+        fR.close();
+
+        cout << "Данные получены:\n";
+        cout << "Id: " << request.id << endl;
+        cout << "Имя: " << request.user_name << endl;
+        cout << "Кубки: " << request.trophies << endl;
+        cout << "Рейтинг в ранкеде: " << request.elo_in_ranked << endl;
+        cout << "Количество 35 рангов: " << request.rank35 << endl;
+
+        float index = request.trophies / 10 + request.elo_in_ranked + request.rank35 * 1000;
+        if (index < 5000) { answer = 0; }
+        if (index >= 5000 and index < 15000) { answer = 1; }
+        if (index >= 15000 and index < 25000) { answer = 2; }
+        if (index >= 25000) { answer = 3; }
+        fA.open(nameA, ios::app);
+        fA.write((char*)&answer, sizeof(answer));
+        fA.close();
+    }
+    return 0;
+}
+
+
+
+
+
+
+
