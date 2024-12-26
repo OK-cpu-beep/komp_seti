@@ -1,0 +1,172 @@
+server:
+
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include <winsock2.h>
+#include <windows.h>
+#include <string>
+#include <iostream>
+#include <map>
+#include <vector>
+#pragma comment(lib, "Ws2_32.lib")
+#pragma warning(disable: 4996)
+using namespace std;
+#define PORT 666    // порт сервера
+#define PORT 666    // порт сервера
+#define sHELLO "Дарова чувак! Введи Фамилию топ 10 футболиста чтобы увидеть его статы!\n"
+int main() {
+    setlocale(LC_ALL, "rus");
+    map <string, vector <int> > Data = {
+        {"Rodri", {8,7,190}},
+        {"Ronaldo", {9,10,187}},
+        {"Messi", {8,10,170}},
+        {"Lewandowski", {7,9,185}},
+        {"Vinicius", {10,8,176}},
+        {"De Bruyne", {7,7,181}},
+        {"Kane", {8,8,188}},
+        {"Mbappe", {10,7,178}},
+        {"VanDijk", {7,8,195}},
+        {"Bellingham", {7,9,186}},
+        };
+    char buff[1024];
+    cout << "СЕРВЕР ФУТБОЛЬНИК\n";
+    // шаг 1 - подключение библиотеки 
+    if (WSAStartup(0x202, (WSADATA*)&buff[0]))
+    {
+        cout << "WSAStartup error: " << WSAGetLastError();
+        return -1;
+    }
+    // шаг 2 - создание сокета
+    SOCKET Lsock;
+    Lsock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (Lsock == INVALID_SOCKET) {
+        cout << "SOCKET() ERROR: " << WSAGetLastError();
+        WSACleanup();
+        return -1;
+    }
+    // шаг 3 - связывание сокета с локальным адресом 
+    sockaddr_in Laddr;
+    Laddr.sin_family = AF_INET;
+    Laddr.sin_addr.s_addr = INADDR_ANY;   // или 0 (любой IP адрес)
+    Laddr.sin_port = htons(PORT);
+    if (bind(Lsock, (sockaddr*)&Laddr, sizeof(Laddr)))
+    {
+        cout << "BIND ERROR:" << WSAGetLastError();
+        closesocket(Lsock);
+        WSACleanup();
+        return -1;
+    }
+    // шаг 4 обработка пакетов, присланных клиентами
+    while (1) {
+        sockaddr_in    Caddr;
+        int Caddr_size = sizeof(Caddr);
+        int bsize = recvfrom(Lsock, &buff[0], sizeof(buff) - 1, 0,
+            (sockaddr*)&Caddr, &Caddr_size);
+        if (bsize == SOCKET_ERROR)
+            cout << "RECVFROM() ERROR:" << WSAGetLastError();
+        // Определяем IP-адрес клиента и прочие атрибуты
+        HOSTENT* hst;
+        hst = gethostbyaddr((char*)&Caddr.sin_addr, 4, AF_INET);
+        cout << "НОВЫЕ ДАННЫЕ!\n" <<
+            ((hst) ? hst->h_name : "Unknown host") << "/n" <<
+            inet_ntoa(Caddr.sin_addr) << "/n" << ntohs(Caddr.sin_port) << '\n';
+        buff[bsize] = '\0';              // добавление завершающего нуля 
+        // посылка датаграммы клиенту
+        string check(buff);
+        cout << "Принято " << check << endl;
+        if (Data.count(check) > 0) {
+            check = "Футболист " + check + " найден\nСкорость: " + to_string(Data.at(check)[0]) + "\nСила: " + to_string(Data.at(check)[1]) + "\nРост: " + to_string(Data.at(check)[2]);
+        }
+        else {
+            check = "Такой футболист не найден";
+        }
+        strcpy(buff, check.c_str());
+        sendto(Lsock, &buff[0], 100, 0, (sockaddr*)&Caddr, sizeof(Caddr));
+    }      return 0;
+}
+
+
+
+
+client:
+
+// пример UDP-клиента
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include <winsock2.h>
+// #include "stdafx.h"
+#include <string>
+#include <windows.h>
+#include <iostream>
+#pragma comment(lib, "ws2_32.lib")
+#pragma warning(disable: 4996)
+using namespace std;
+#define PORT 666
+#define SERVERADDR "127.0.0.1" // IP-адрес сервера
+
+int main()
+{
+    setlocale(LC_ALL, "rus");
+    char buff[10 * 1014];
+    cout << "UDP ФУТБОЛЬНИК КЛИЕНТ\nНапишите quit чтобы выйти \n";
+    // Шаг 1 - иницилизация библиотеки Winsocks
+    if (WSAStartup(0x202, (WSADATA*)&buff))
+    {
+        cout << "WSASTARTUP ERROR: " << WSAGetLastError() << "\n";
+        return -1;
+    }
+    // Шаг 2 - открытие сокета
+    SOCKET my_sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (my_sock == INVALID_SOCKET) {
+        cout << "SOCKET() ERROR: " << WSAGetLastError() << "\n";
+        WSACleanup();
+        return -1;
+    }
+    // Шаг 3 - обмен сообщений с сервером
+    HOSTENT* hst;
+    sockaddr_in Daddr;
+    Daddr.sin_family = AF_INET;
+    Daddr.sin_port = htons(PORT);
+
+    // определение IP-адреса узла
+    if (inet_addr(SERVERADDR))
+        Daddr.sin_addr.s_addr = inet_addr(SERVERADDR);
+    else
+        if (hst = gethostbyname(SERVERADDR))
+            Daddr.sin_addr.s_addr = ((unsigned long**)
+                hst->h_addr_list)[0][0];
+        else {
+            cout << "Unknown Host: " << WSAGetLastError() << "\n";
+            closesocket(my_sock);
+            WSACleanup();
+            return -1;
+        }
+    while (1) {
+        // чтение сообщения с клавиатуры
+        string SS;
+        cout << "\nВведите Фамилию футболиста\n";
+        getline(cin, SS);
+        
+        if (SS == "quit") break;
+        // Передача сообщений на сервер
+        sendto(my_sock, (char*)&SS[0], SS.size(), 0,
+            (sockaddr*)&Daddr, sizeof(Daddr));
+        // Прием сообщения с сервера
+        sockaddr_in SRaddr;
+        int SRaddr_size = sizeof(SRaddr);
+        int n = recvfrom(my_sock, buff, sizeof(buff), 0,
+            (sockaddr*)&SRaddr, &SRaddr_size);
+        if (n == SOCKET_ERROR) {
+            cout << "RECVFROM() ERROR:" << WSAGetLastError() << "\n";
+            closesocket(my_sock);
+            WSACleanup();  return -1;
+        }
+        buff[n] = '\0';
+        // Вывод принятого с сервера сообщения на экран
+        cout << "Пришло сообщение:\n" << buff << "\n";
+    }
+    // шаг последний - выход
+    closesocket(my_sock);
+    WSACleanup();     return 0;
+}
+
+
+
